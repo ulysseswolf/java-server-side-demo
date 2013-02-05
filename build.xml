@@ -1,0 +1,223 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project name="project" basedir="." default="report">
+	<!-- 定义报表存储路径变量 -->
+	<property name="out.dir" value="${basedir}/out" />
+	<property name="out.instr.dir" value="${out.dir}/instr" />
+	<property name="out.coverage.dir" value="${out.dir}/coverage" />
+	<property name="out.junitReport.dir" value="${out.dir}/junitReport" />
+
+	<!-- 定义工程lib、src、conf以及class文件存储路径变量 -->
+	<property name="lib.dir" value="${basedir}/lib" />
+	<property name="lib.jetty.dir" value="${basedir}/lib/jetty" />
+	<property name="lib.test.dir" value="${basedir}/lib/test" />
+	<property name="conf.dir" value="${basedir}/conf" />
+	<property name="src.jetty.dir" value="${basedir}/jetty" />
+	<property name="src.main.dir" value="${basedir}/src" />
+	<property name="src.test.dir" value="${basedir}/test" />
+	<property name="bin.dir" value="${basedir}/build" />
+	<property name="bin.main.dir" value="${bin.dir}/main" />
+	<property name="bin.test.dir" value="${bin.dir}/test" />
+	<property name="dest.dir" value="${basedir}/dest" />
+	<property name="basedir" value="${basedir}" />
+
+	<!-- 定义emma的lib所在路径变量 -->
+	<path id="emma.lib">
+		<pathelement location="${lib.test.dir}/emma.jar" />
+		<pathelement location="${lib.test.dir}/emma_ant.jar" />
+	</path>
+	<!-- 定义emma是否启用的状态 -->
+	<property name="emma.enabled" value="true" />
+	<!-- 导入emma中定义的task -->
+	<taskdef resource="emma_ant.properties" classpathref="emma.lib" />
+
+	<!-- 设置classpath变量 -->
+	<path id="compile.classpath">
+		<fileset dir="${lib.dir}">
+			<include name="**/*.jar" />
+		</fileset>
+	</path>
+
+	<!-- 目录清除命令 -->
+	<target name="clean">
+		<delete dir="${out.dir}" />
+		<delete dir="${bin.dir}" />
+		<delete dir="${dest.dir}" />
+	</target>
+
+	<!-- 目录创建命令 -->
+	<target name="init" depends="clean">
+		<tstamp />
+		<mkdir dir="${out.instr.dir}" />
+		<mkdir dir="${out.coverage.dir}" />
+		<mkdir dir="${out.junitReport.dir}" />
+		<mkdir dir="${bin.main.dir}" />
+		<mkdir dir="${bin.test.dir}" />
+		<mkdir dir="${dest.dir}" />
+	</target>
+
+	<!-- 代码编译命令 -->
+	<target name="compile" depends="init">
+		<javac srcdir="${src.main.dir}:${src.jetty.dir}" destdir="${bin.main.dir}" debug="on" encoding="UTF-8" includeantruntime="on">
+			<classpath refid="compile.classpath" />
+		</javac>
+		<copy todir="${bin.main.dir}">
+			<fileset dir="${src.main.dir}">
+				<exclude name="**/*.java" />
+			</fileset>
+			<fileset dir="${src.jetty.dir}">
+				<exclude name="**/*.java" />
+			</fileset>
+			<fileset dir="${conf.dir}" />
+		</copy>
+	</target>
+
+	<!-- 测试代码编译命令 -->
+	<target name="compile-test" depends="compile">
+		<javac srcdir="${src.test.dir}" destdir="${bin.test.dir}" encoding="UTF-8" includeantruntime="on">
+			<classpath refid="compile.classpath" />
+			<classpath location="${bin.main.dir}" />
+		</javac>
+		<copy todir="${bin.test.dir}">
+			<fileset dir="${src.test.dir}">
+				<exclude name="**/*.java" />
+			</fileset>
+		</copy>
+	</target>
+
+	<!-- 生成一个不包含启动jetty服务代码的jar包 -->
+	<target name="package" depends="compile">
+		<jar destfile="${dest.dir}/ics-${DSTAMP}.jar">
+			<fileset dir="${bin.main.dir}">
+				<include name="**/*.class" />
+				<exclude name="**/MyServer.class" />
+			</fileset>
+		</jar>
+	</target>
+
+	<!-- 生成一个包含启动jetty服务代码的jar包 -->
+	<target name="package-jetty" depends="compile">
+		<jar destfile="${dest.dir}/ics-jetty-${DSTAMP}.jar">
+			<fileset dir="${bin.main.dir}">
+				<include name="**/*.class" />
+			</fileset>
+		</jar>
+	</target>
+
+	<!-- 生成一个war包 -->
+	<target name="war" depends="package">
+		<war destfile="${dest.dir}/ics.war" webxml="${bin.main.dir}/web.xml" encoding="UTF-8">
+			<lib dir="${lib.dir}">
+				<include name="*.jar" />
+			</lib>
+			<lib file="${dest.dir}/ics-${DSTAMP}.jar" />
+			<classes dir="${bin.main.dir}">
+				<include name="**/*.xml" />
+				<include name="**/*.properties" />
+				<exclude name="**/jetty.xml" />
+			</classes>
+		</war>
+	</target>
+
+	<!-- 生成一个独立运行的应用程序目录 -->
+	<target name="standalone" depends="package-jetty">
+		<mkdir dir="${dest.dir}/ICS/conf" />
+		<mkdir dir="${dest.dir}/ICS/lib" />
+		<mkdir dir="${dest.dir}/ICS/tmp" />
+		<copy todir="${dest.dir}/ICS/lib">
+			<fileset dir="${lib.dir}">
+				<include name="*.jar" />
+			</fileset>
+			<fileset dir="${lib.jetty.dir}" />
+			<fileset file="${dest.dir}/ics-jetty-${DSTAMP}.jar" />
+		</copy>
+		<copy todir="${dest.dir}/ICS/conf">
+			<fileset dir="${bin.main.dir}">
+				<include name="**/*.xml" />
+				<include name="**/*.properties" />
+				<include name="**/*.so" />
+			</fileset>
+		</copy>
+		<copy todir="${dest.dir}/ICS">
+			<fileset dir="${bin.main.dir}">
+				<include name="**/*.sh" />
+			</fileset>
+		</copy>
+		
+		<!--  model和sample文件夹不存在 -->
+		<!-- 
+		<copy todir="${dest.dir}/ICS">
+			<fileset dir="${basedir}">
+				<include name="**/model/**" />
+			</fileset>
+		</copy>
+		<copy todir="${dest.dir}/ICS">
+			<fileset dir="${basedir}">
+				<include name="**/sample/**" />
+			</fileset>
+		</copy>
+		-->
+		<zip destfile="${dest.dir}/ICS.zip" basedir="${dest.dir}/ICS" encoding="UTF-8" />
+		<delete dir="${dest.dir}/ICS" />
+	</target>
+
+	<!-- emma修改class文件命令 -->
+	<target name="instr" depends="compile-test">
+		<emma enabled="${emma.enabled}" verbosity="info">
+			<instr instrpath="${bin.main.dir}" destdir="${out.instr.dir}" metadatafile="${out.coverage.dir}/metadata.emma" merge="true" />
+		</emma>
+		<copy todir="${out.instr.dir}">
+			<fileset dir="${bin.main.dir}">
+				<exclude name="**/*.sh" />
+			</fileset>
+		</copy>
+	</target>
+
+	<!-- 测试命令 -->
+	<target name="test" depends="instr">
+		<junit fork="true" printsummary="yes" errorproperty="test.error" haltonfailure="no">
+			<jvmarg value="-Demma.coverage.out.file=${out.coverage.dir}/metadata.emma" />
+			<jvmarg value="-Demma.coverage.out.merge=true" />
+			<jvmarg value="-Djava.library.path=${conf.dir}" />
+			<classpath location="${out.instr.dir}" />
+			<classpath location="${bin.test.dir}" />
+			<classpath refid="compile.classpath" />
+			<formatter type="xml" />
+			<batchtest todir="${out.junitReport.dir}" fork="yes">
+				<fileset dir="${bin.test.dir}" includes="**/*Test.class" />
+			</batchtest>
+		</junit>
+	</target>
+
+	<!-- junit运行报表命令 -->
+	<target name="gen-report-junit" depends="test">
+		<junitreport todir="${out.junitReport.dir}">
+			<fileset dir="${out.junitReport.dir}">
+				<include name="*.xml" />
+			</fileset>
+			<report format="frames" todir="${out.junitReport.dir}" />
+		</junitreport>
+	</target>
+
+	<!-- emma代码覆盖报表命令 -->
+	<target name="gen-report-coverage" depends="test">
+		<emma enabled="${emma.enabled}">
+			<report sourcepath="${src.main.dir}" encoding="UTF-8" sort="+line,+block,+name,+method,+class" metrics="method:100,block:90,line:90,class:100">
+				<fileset dir="${out.coverage.dir}">
+					<include name="metadata.emma" />
+				</fileset>
+				<html outfile="${out.coverage.dir}/coverage.html" />
+			</report>
+		</emma>
+	</target>
+
+	<target name="report" depends="gen-report-junit, gen-report-coverage" />
+
+	<!-- 台标打包 -->
+	<target name="resource">
+		<zip destfile="${basedir}/resource.zip" encoding="UTF-8">
+		<fileset dir="${basedir}/lire/resource">
+			<include name="**/*.jpg" />
+		</fileset>
+		</zip>
+	</target>
+</project>
